@@ -1,6 +1,7 @@
 .PHONY: init start mocks lint test checks stop compush stage
 MAKEFLAGS += --no-print-directory
 GIT_BRANCH := $(shell git branch --show-current)
+GIT_REMOTE := git@github.com:Calyr3x/QuietGroveBackend.git
 
 CHECK_EMOJI := ✅
 ERROR_EMOJI := ❌
@@ -72,5 +73,5 @@ stage:
 	@echo "$(INFO_EMOJI) Staging changes..."
 	@git add .
 	@git commit -m "$(m)"
-	@git push origin $(GIT_BRANCH)
+	@git push $(GIT_REMOTE) $(GIT_BRANCH)
 	@echo "$(CHECK_EMOJI) Changes pushed to $(GIT_BRANCH)!"
