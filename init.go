@@ -2,7 +2,10 @@ package tracing
 
 import (
 	"context"
+	"time"
+
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -11,45 +14,97 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// Config содержит настройки для подключения к Jaeger OTLP-экспортеру.
-type Config struct {
-	// HostName имя хоста, которое будет записано в ресурс трассировщика
-	HostName string
-	// ServiceName имя сервиса для создания спанов
-	ServiceName string
-	// Endpoint адрес OTLP/Jaeger collector (например, "localhost:4317")
-	Endpoint string
+// Option — функция, настраивающая поведение New
+type Option func(*options)
+
+// внутренний конфиг по-умолчанию
+type options struct {
+	insecure        bool
+	batchTimeout    time.Duration
+	sampler         sdktrace.Sampler
+	extraAttributes []attribute.KeyValue
 }
 
-type Jaeger struct {
-	ServiceName    string
-	tracer         trace.Tracer
-	tracerProvider *sdktrace.TracerProvider
+// WithInsecure отключает TLS
+func WithInsecure() Option {
+	return func(o *options) {
+		o.insecure = true
+	}
 }
 
-// New инициализирует провайдер трассировки OTLP (Jaeger) с указанными настройками
-// и регистрирует глобальный TracerProvider и TextMapPropagator.
-func New(ctx context.Context, cfg Config) (*Jaeger, error) {
-	exp, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithEndpoint(cfg.Endpoint),
-		otlptracegrpc.WithInsecure(),
+// WithBatchTimeout задаёт максимальное время буферизации
+func WithBatchTimeout(d time.Duration) Option {
+	return func(o *options) {
+		o.batchTimeout = d
+	}
+}
+
+// WithSampler позволяет задать стратегию семплинга
+func WithSampler(s sdktrace.Sampler) Option {
+	return func(o *options) {
+		o.sampler = s
+	}
+}
+
+// WithResourceAttribute добавляет произвольный атрибут к ресурсам
+func WithResourceAttribute(attr attribute.KeyValue) Option {
+	return func(o *options) {
+		o.extraAttributes = append(o.extraAttributes, attr)
+	}
+}
+
+type TracerWrapper struct {
+	Tracer   trace.Tracer
+	Shutdown func(ctx context.Context) error
+}
+
+// New создаёт tracer и возвращает его вместе с функцией Shutdown.
+// Параметры serverName и endpoint являются обязательными.
+func New(
+	ctx context.Context,
+	serverName string,
+	endpoint string,
+	opts ...Option,
+) (*TracerWrapper, error) {
+	o := &options{
+		batchTimeout: time.Second * 5,
+		sampler:      sdktrace.ParentBased(sdktrace.AlwaysSample()),
+	}
+	for _, fn := range opts {
+		fn(o)
+	}
+
+	expOpts := []otlptracegrpc.Option{
+		otlptracegrpc.WithEndpoint(endpoint),
+	}
+	if o.insecure {
+		expOpts = append(expOpts, otlptracegrpc.WithInsecure())
+	}
+	exp, err := otlptracegrpc.New(ctx, expOpts...)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := resource.New(
+		ctx,
+		resource.WithSchemaURL(semconv.SchemaURL),
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(serverName),
+			semconv.HostNameKey.String(serverName),
+		),
+		resource.WithAttributes(o.extraAttributes...),
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exp),
-		sdktrace.WithResource(resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceNameKey.String(cfg.ServiceName),
-			semconv.HostNameKey.String(cfg.HostName),
-		)),
+		sdktrace.WithBatcher(exp, sdktrace.WithBatchTimeout(o.batchTimeout)),
+		sdktrace.WithSampler(o.sampler),
+		sdktrace.WithResource(res),
 	)
-	// Регистрируем глобальный TracerProvider
-	otel.SetTracerProvider(tp)
 
-	// Настраиваем пропагатор W3C TraceContext + Baggage
+	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(
 		propagation.NewCompositeTextMapPropagator(
 			propagation.TraceContext{},
@@ -57,14 +112,10 @@ func New(ctx context.Context, cfg Config) (*Jaeger, error) {
 		),
 	)
 
-	return &Jaeger{
-		ServiceName:    cfg.ServiceName,
-		tracer:         tp.Tracer(cfg.ServiceName),
-		tracerProvider: tp,
+	return &TracerWrapper{
+		Tracer: tp.Tracer(serverName),
+		Shutdown: func(ctx context.Context) error {
+			return tp.Shutdown(ctx)
+		},
 	}, nil
-}
-
-// Shutdown завершает работу TracerProvider и дожидается отправки всех спанов
-func (j *Jaeger) Shutdown(ctx context.Context) error {
-	return j.tracerProvider.Shutdown(ctx)
 }
