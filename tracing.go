@@ -1,0 +1,96 @@
+package jaeger
+
+import (
+	"context"
+	"encoding/json"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.30.0"
+	"go.opentelemetry.io/otel/trace"
+)
+
+// Config содержит настройки для подключения к Jaeger OTLP-экспортеру.
+type Config struct {
+	// HostName имя хоста, которое будет записано в ресурс трассировщика
+	HostName string
+	// ServiceName имя сервиса для создания спанов
+	ServiceName string
+	// Endpoint адрес OTLP/Jaeger collector (например, "localhost:4317")
+	Endpoint string
+}
+
+type Jaeger struct {
+	ServiceName    string
+	tracer         trace.Tracer
+	tracerProvider *sdktrace.TracerProvider
+}
+
+// New инициализирует провайдер трассировки OTLP (Jaeger) с указанными настройками
+// и регистрирует глобальный TracerProvider и TextMapPropagator.
+func New(ctx context.Context, cfg Config) (*Jaeger, error) {
+	exp, err := otlptracegrpc.New(ctx,
+		otlptracegrpc.WithEndpoint(cfg.Endpoint),
+		otlptracegrpc.WithInsecure(),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exp),
+		sdktrace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String(cfg.ServiceName),
+			semconv.HostNameKey.String(cfg.HostName),
+		)),
+	)
+	// Регистрируем глобальный TracerProvider
+	otel.SetTracerProvider(tp)
+
+	// Настраиваем пропагатор W3C TraceContext + Baggage
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		),
+	)
+
+	return &Jaeger{
+		ServiceName:    cfg.ServiceName,
+		tracer:         tp.Tracer(cfg.ServiceName),
+		tracerProvider: tp,
+	}, nil
+}
+
+// Shutdown завершает работу TracerProvider и дожидается отправки всех спанов
+func (j *Jaeger) Shutdown(ctx context.Context) error {
+	return j.tracerProvider.Shutdown(ctx)
+}
+
+// RecordError записывает ошибку в спан и устанавливает его статус как Error
+func (j *Jaeger) RecordError(span trace.Span, err error) {
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
+}
+
+// Start создаёт новый спан с указанным именем unit и возвращает обновлённый контекст
+func (j *Jaeger) Start(ctx context.Context, unit string) (context.Context, trace.Span) {
+	return j.tracer.Start(ctx, unit)
+}
+
+// SetAttributes устанавливает атрибут с именем unitName и значением, полученным из JSON-marshal req
+func (j *Jaeger) SetAttributes(span trace.Span, req any, unitName string) {
+	if reqJSON, mlErr := json.Marshal(req); mlErr == nil {
+		span.SetAttributes(attribute.String(unitName, string(reqJSON)))
+	}
+}
+
+// AddEvent добавляет событие с именем name и набором атрибутов attrs в спан
+func (j *Jaeger) AddEvent(span trace.Span, name string, attrs ...attribute.KeyValue) {
+	span.AddEvent(name, trace.WithAttributes(attrs...))
+}
