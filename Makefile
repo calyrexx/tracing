@@ -10,32 +10,12 @@ ARROW_UP := ⬆️
 
 help:
 	@echo "Available commands:"
-	@echo "  build      - Build the binary file"
-	@echo "  init       - Initialize the project"
-	@echo "  start      - Start the application"
 	@echo "  mocks      - Generate mocks"
 	@echo "  lint       - Run linters"
 	@echo "  test       - Run tests"
 	@echo "  checks     - Run all checks (mocks, lint, test)"
-	@echo "  stop       - Stop containers"
 	@echo "  compush    - Run pre-commit checks, commit, and push changes"
 	@echo "  stage      - Stage changes and push to Git"
-
-build:
-	@echo "$(INFO_EMOJI) Building the binary file..."
-	@GOOS=linux CGO_ENABLED=0 go build -o portal ./cmd/main.go
-	@echo "$(CHECK_EMOJI) Project built successfully!"
-
-init:
-	@echo "$(INFO_EMOJI) Initializing project..."
-	@docker-compose up -d
-	@echo "$(CHECK_EMOJI) Project initialized successfully!"
-
-start:
-	@echo "$(INFO_EMOJI) Starting the application..."
-	@docker-compose up -d
-	@trap 'exit 0' SIGINT; go run $(CURDIR)/cmd/main.go
-	@echo "$(CHECK_EMOJI) Application started successfully!"
 
 mocks:
 	@echo "$(INFO_EMOJI) Generating mocks..."
@@ -57,11 +37,6 @@ test:
 
 checks: mocks lint test
 	@echo "$(CHECK_EMOJI) All checks completed successfully!"
-
-stop:
-	@echo "$(INFO_EMOJI) Stopping containers..."
-	@docker-compose down
-	@echo "$(CHECK_EMOJI) Containers stopped successfully!"
 
 compush:
 	@echo "$(INFO_EMOJI) Running pre-commit checks..."
