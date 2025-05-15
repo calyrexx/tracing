@@ -55,8 +55,9 @@ func WithResourceAttribute(attr attribute.KeyValue) Option {
 
 type TracerWrapper struct {
 	Tracer   trace.Tracer
-	Shutdown func(ctx context.Context) error
 }
+
+type ShutdownFunc func(ctx context.Context) error
 
 // New создаёт tracer и возвращает его вместе с функцией Shutdown.
 // Параметры serverName и endpoint являются обязательными.
@@ -65,7 +66,7 @@ func New(
 	serverName string,
 	endpoint string,
 	opts ...Option,
-) (*TracerWrapper, error) {
+) (*TracerWrapper, ShutdownFunc, error) {
 	o := &options{
 		batchTimeout: time.Second * 5,
 		sampler:      sdktrace.ParentBased(sdktrace.AlwaysSample()),
@@ -114,8 +115,5 @@ func New(
 
 	return &TracerWrapper{
 		Tracer: tp.Tracer(serverName),
-		Shutdown: func(ctx context.Context) error {
-			return tp.Shutdown(ctx)
-		},
-	}, nil
+	}, tp.Shutdown, nil
 }
