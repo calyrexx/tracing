@@ -38,6 +38,7 @@ func (c metadataCarrier) Keys() []string {
 	return out
 }
 
+// PropagationUnaryInterceptor распространяет трейс через метаданные gRPC
 func PropagationUnaryInterceptor() grpc.UnaryClientInterceptor {
 	propagator := otel.GetTextMapPropagator()
 	return func(
@@ -61,6 +62,7 @@ func PropagationUnaryInterceptor() grpc.UnaryClientInterceptor {
 	}
 }
 
+// TracingUnaryInterceptor добавляет трейсинг для входящих gRPC-запросов
 func TracingUnaryInterceptor() grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
