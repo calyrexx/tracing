@@ -38,12 +38,13 @@ server := grpc.NewServer(
 )
 ```
 Клиент:
+```go
 conn, _ := grpc.Dial(
     "localhost:50051",
     grpc.WithStatsHandler(tracing.StatsClientHandler()),
     grpc.WithUnaryInterceptor(tracing.PropagationUnaryInterceptor()),
 )
-
+```
 ### Основные методы
 
 Работа с трейсами:
