@@ -30,3 +30,13 @@ func (j *TracerWrapper) SetAttributes(span trace.Span, req any, unitName string)
 func (j *TracerWrapper) AddEvent(span trace.Span, name string, attrs ...attribute.KeyValue) {
 	span.AddEvent(name, trace.WithAttributes(attrs...))
 }
+
+// TraceIDFromContext возвращает текущий TraceID из контекста или пустую строку, если спан не валиден
+func TraceIDFromContext(ctx context.Context) string {
+  span := trace.SpanFromContext(ctx)
+  sc := span.SpanContext()
+  if sc.IsValid() {
+    return sc.TraceID().String()
+  }
+  return ""
+}
