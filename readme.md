@@ -11,7 +11,7 @@
 
 Установка
 ```bash
-go get github.com/your-repo/tracing
+go get github.com/Calyr3x/tracing
 ```
 
 ## Быстрый старт
