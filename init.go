@@ -32,6 +32,24 @@ func WithInsecure() Option {
 	}
 }
 
+// WithHostName задаёт атрибут хоста в ресурсах трассировки
+func WithHostName(host string) Option {
+    return func(o *options) {
+        o.extraAttributes = append(o.extraAttributes,
+            semconv.HostNameKey.String(host),
+        )
+    }
+}
+
+// WithEnvironment задаёт зону (prod/dev/stage) в ресурсах трассировки
+func WithEnvironment(env string) Option {
+    return func(o *options) {
+        o.extraAttributes = append(o.extraAttributes,
+            attribute.String("deployment.environment", env),
+        )
+    }
+}
+
 // WithBatchTimeout задаёт максимальное время буферизации
 func WithBatchTimeout(d time.Duration) Option {
 	return func(o *options) {
