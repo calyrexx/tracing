@@ -86,7 +86,7 @@ func ProcessOrder(ctx context.Context, order *Order) error {
     ctx, span := tw.Start(ctx, "ProcessOrder")
     defer span.End()
 
-    tw.SetAttributes(span, order, "order.details")
+    tw.SetJSONAttribute(span, "order.details", order)
 
     if err := validate(order); err != nil {
         tw.RecordError(span, err)
