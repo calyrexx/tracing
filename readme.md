@@ -38,13 +38,14 @@ server := grpc.NewServer(
 )
 ```
 Клиент:
+```go
 conn, _ := grpc.Dial(
     "localhost:50051",
     grpc.WithStatsHandler(tracing.StatsClientHandler()),
     grpc.WithUnaryInterceptor(tracing.PropagationUnaryInterceptor()),
 )
-
-### Основные методы
+```
+## Основные методы
 
 Работа с трейсами:
 ```go
@@ -79,13 +80,13 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 | `WithSampler()`           | Кастомная стратегия семплинга          |
 | `WithResourceAttribute()` | Произвольные атрибуты ресурсов         |
 
-### Пример интеграции
+## Пример интеграции
 ```go
 func ProcessOrder(ctx context.Context, order *Order) error {
     ctx, span := tw.Start(ctx, "ProcessOrder")
     defer span.End()
 
-    tw.SetAttributes(span, order, "order.details")
+    tw.SetJSONAttribute(span, "order.details", order)
 
     if err := validate(order); err != nil {
         tw.RecordError(span, err)
