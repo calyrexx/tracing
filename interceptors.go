@@ -38,7 +38,7 @@ func (c metadataCarrier) Keys() []string {
 	return out
 }
 
-func PropagateTraceUnary() grpc.UnaryClientInterceptor {
+func PropagationUnaryInterceptor() grpc.UnaryClientInterceptor {
 	propagator := otel.GetTextMapPropagator()
 	return func(
 		ctx context.Context,

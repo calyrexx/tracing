@@ -3,6 +3,7 @@ module github.com/Calyr3x/tracing
 go 1.24.3
 
 require (
+	github.com/goccy/go-json v0.10.5
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.60.0
 	go.opentelemetry.io/otel v1.35.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.35.0

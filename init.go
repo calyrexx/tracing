@@ -34,20 +34,28 @@ func WithInsecure() Option {
 
 // WithHostName задаёт атрибут хоста в ресурсах трассировки
 func WithHostName(host string) Option {
-    return func(o *options) {
-        o.extraAttributes = append(o.extraAttributes,
-            semconv.HostNameKey.String(host),
-        )
-    }
+	return func(o *options) {
+		o.extraAttributes = append(o.extraAttributes,
+			semconv.HostNameKey.String(host),
+		)
+	}
 }
 
 // WithEnvironment задаёт зону (prod/dev/stage) в ресурсах трассировки
 func WithEnvironment(env string) Option {
-    return func(o *options) {
-        o.extraAttributes = append(o.extraAttributes,
-            attribute.String("deployment.environment", env),
-        )
-    }
+	return func(o *options) {
+		o.extraAttributes = append(o.extraAttributes,
+			attribute.String("deployment.environment", env),
+		)
+	}
+}
+
+func WithServiceVersion(version string) Option {
+	return func(o *options) {
+		o.extraAttributes = append(o.extraAttributes,
+			semconv.ServiceVersionKey.String(version),
+		)
+	}
 }
 
 // WithBatchTimeout задаёт максимальное время буферизации
@@ -72,7 +80,8 @@ func WithResourceAttribute(attr attribute.KeyValue) Option {
 }
 
 type TracerWrapper struct {
-	Tracer   trace.Tracer
+	tracer trace.Tracer
+	tp     *sdktrace.TracerProvider
 }
 
 type ShutdownFunc func(ctx context.Context) error
@@ -84,7 +93,7 @@ func New(
 	serverName string,
 	endpoint string,
 	opts ...Option,
-) (*TracerWrapper, ShutdownFunc, error) {
+) (*TracerWrapper, error) {
 	o := &options{
 		batchTimeout: time.Second * 5,
 		sampler:      sdktrace.ParentBased(sdktrace.AlwaysSample()),
@@ -101,7 +110,7 @@ func New(
 	}
 	exp, err := otlptracegrpc.New(ctx, expOpts...)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	res, err := resource.New(
@@ -114,7 +123,7 @@ func New(
 		resource.WithAttributes(o.extraAttributes...),
 	)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	tp := sdktrace.NewTracerProvider(
@@ -132,6 +141,15 @@ func New(
 	)
 
 	return &TracerWrapper{
-		Tracer: tp.Tracer(serverName),
-	}, tp.Shutdown, nil
+		tracer: tp.Tracer(serverName),
+		tp:     tp,
+	}, nil
+}
+
+// Shutdown останавливает провайдер трассировки
+func (tw *TracerWrapper) Shutdown(ctx context.Context) error {
+	if tw.tp != nil {
+		return tw.tp.Shutdown(ctx)
+	}
+	return nil
 }
