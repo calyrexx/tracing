@@ -6,8 +6,15 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
-func StatsHandler() stats.Handler {
+func StatsClientHandler() stats.Handler {
 	return otelgrpc.NewClientHandler(
+		otelgrpc.WithTracerProvider(otel.GetTracerProvider()),
+		otelgrpc.WithPropagators(otel.GetTextMapPropagator()),
+	)
+}
+
+func StatsServerHandler() stats.Handler {
+	return otelgrpc.NewServerHandler(
 		otelgrpc.WithTracerProvider(otel.GetTracerProvider()),
 		otelgrpc.WithPropagators(otel.GetTextMapPropagator()),
 	)
