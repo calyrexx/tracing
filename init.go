@@ -83,7 +83,7 @@ func New(
 	}
 	exp, err := otlptracegrpc.New(ctx, expOpts...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	res, err := resource.New(
@@ -96,7 +96,7 @@ func New(
 		resource.WithAttributes(o.extraAttributes...),
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	tp := sdktrace.NewTracerProvider(
