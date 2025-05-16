@@ -1,4 +1,4 @@
-.PHONY: init start mocks lint test checks stop compush stage
+.PHONY: mocks lint test checks compush stage
 MAKEFLAGS += --no-print-directory
 GIT_BRANCH := $(shell git branch --show-current)
 GIT_REMOTE := git@github.com:Calyr3x/tracing.git
