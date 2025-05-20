@@ -8,7 +8,7 @@ import (
 
 type tracer struct{}
 
-func NewTracer() tracing.Tracer {
+func New() tracing.Tracer {
 	return new(tracer)
 }
 

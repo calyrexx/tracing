@@ -1,12 +1,6 @@
 package discard
 
-import "github.com/Calyr3x/tracing"
-
 type span struct{}
-
-func NewSpan() tracing.Span {
-	return new(span)
-}
 
 func (s span) End() {}
 
