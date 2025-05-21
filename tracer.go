@@ -169,9 +169,8 @@ func (tw *TracerWrapper) TraceIDFromContext(ctx context.Context) string {
 	return ""
 }
 
-func (tw *TracerWrapper) NewTracer(name string) TracerWrapper {
+func NewSubTracer(name string) TracerWrapper {
 	return TracerWrapper{
 		tracer: otel.GetTracerProvider().Tracer(name),
-		tp:     tw.tp,
 	}
 }
