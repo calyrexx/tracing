@@ -85,8 +85,7 @@ type TracerWrapper struct {
 	tp     *sdktrace.TracerProvider
 }
 
-// New создаёт tracer и возвращает его вместе с функцией Shutdown.
-// Параметры serverName и endpoint являются обязательными.
+// New создаёт tracer и возвращает его. Параметры serverName и endpoint являются обязательными.
 func New(
 	ctx context.Context,
 	serverName string,
@@ -168,4 +167,11 @@ func (tw *TracerWrapper) TraceIDFromContext(ctx context.Context) string {
 		return sc.TraceID().String()
 	}
 	return ""
+}
+
+func (tw *TracerWrapper) NewTracer(name string) TracerWrapper {
+	return TracerWrapper{
+		tracer: otel.GetTracerProvider().Tracer(name),
+		tp:     tw.tp,
+	}
 }
