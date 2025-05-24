@@ -17,7 +17,7 @@
 ## Быстрый старт
 
 ```bash
-go get github.com/Calyr3x/tracing
+go get github.com/calyrexx/tracing
 ```
 
 ```go
