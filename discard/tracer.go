@@ -2,7 +2,7 @@ package discard
 
 import (
 	"context"
-	"github.com/Calyr3x/tracing"
+	"github.com/calyrexx/tracing"
 	"go.opentelemetry.io/otel/trace"
 )
 
