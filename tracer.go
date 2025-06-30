@@ -2,6 +2,7 @@ package tracing
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"go.opentelemetry.io/otel"
