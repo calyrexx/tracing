@@ -146,8 +146,11 @@ func New(
 
 // Shutdown останавливает провайдер трассировки
 func (tw *TracerWrapper) Shutdown(ctx context.Context) error {
-	if tw.tp != nil {
-		return tw.tp.Shutdown(ctx)
+	if tw.tp == nil {
+		return nil
+	}
+	if err := tw.tp.Shutdown(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		return err
 	}
 	return nil
 }
