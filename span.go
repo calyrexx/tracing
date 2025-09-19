@@ -11,7 +11,7 @@ import (
 )
 
 var jsonBufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return new(bytes.Buffer)
 	},
 }
@@ -41,7 +41,7 @@ func (s *spanWrapper) SetBoolAttribute(key string, value bool) {
 }
 
 // SetJSONAttribute сериализует объект в JSON и устанавливает как атрибут
-func (s *spanWrapper) SetJSONAttribute(key string, value interface{}) {
+func (s *spanWrapper) SetJSONAttribute(key string, value any) {
 	buf := jsonBufferPool.Get().(*bytes.Buffer)
 	defer jsonBufferPool.Put(buf)
 	buf.Reset()
@@ -77,7 +77,7 @@ func (s *spanWrapper) RecordError(err error) {
 }
 
 // RecordErrorWithDetails записывает ошибку с дополнительными деталями
-func (s *spanWrapper) RecordErrorWithDetails(err error, details map[string]interface{}) {
+func (s *spanWrapper) RecordErrorWithDetails(err error, details map[string]any) {
 	s.span.RecordError(err)
 	s.span.SetStatus(codes.Error, err.Error())
 
@@ -85,5 +85,6 @@ func (s *spanWrapper) RecordErrorWithDetails(err error, details map[string]inter
 	for k, v := range details {
 		attrs = append(attrs, attribute.String(k, fmt.Sprintf("%v", v)))
 	}
+
 	s.span.SetAttributes(attrs...)
 }

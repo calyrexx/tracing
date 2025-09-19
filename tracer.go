@@ -3,6 +3,11 @@ package tracing
 import (
 	"context"
 	"errors"
+	"github.com/samber/slog-multi"
+	"go.opentelemetry.io/contrib/bridges/otelslog"
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
+	"log/slog"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -24,6 +29,14 @@ type options struct {
 	batchTimeout    time.Duration
 	sampler         sdktrace.Sampler
 	extraAttributes []attribute.KeyValue
+	slogHandler     slog.Handler
+}
+
+// WithSlogHandler включает логирование через handler
+func WithSlogHandler(handler slog.Handler) Option {
+	return func(o *options) {
+		o.slogHandler = handler
+	}
 }
 
 // WithInsecure отключает TLS
@@ -84,6 +97,8 @@ func WithResourceAttribute(attr attribute.KeyValue) Option {
 type TracerWrapper struct {
 	tracer trace.Tracer
 	tp     *sdktrace.TracerProvider
+	lp     *sdklog.LoggerProvider
+	Logger *slog.Logger
 }
 
 // New создаёт tracer и возвращает его. Параметры serverName и endpoint являются обязательными.
@@ -93,23 +108,20 @@ func New(
 	endpoint string,
 	opts ...Option,
 ) (*TracerWrapper, error) {
+	if serverName == "" {
+		return nil, errors.New("server name is required")
+	}
+	if endpoint == "" {
+		return nil, errors.New("endpoint is required")
+	}
+
 	o := &options{
 		batchTimeout: time.Second * 5,
 		sampler:      sdktrace.ParentBased(sdktrace.AlwaysSample()),
 	}
+
 	for _, fn := range opts {
 		fn(o)
-	}
-
-	expOpts := []otlptracegrpc.Option{
-		otlptracegrpc.WithEndpoint(endpoint),
-	}
-	if o.insecure {
-		expOpts = append(expOpts, otlptracegrpc.WithInsecure())
-	}
-	exp, err := otlptracegrpc.New(ctx, expOpts...)
-	if err != nil {
-		return nil, err
 	}
 
 	res, err := resource.New(
@@ -125,13 +137,62 @@ func New(
 		return nil, err
 	}
 
+	// traces
+	traceExpOpts := []otlptracegrpc.Option{
+		otlptracegrpc.WithEndpoint(endpoint),
+	}
+
+	if o.insecure {
+		traceExpOpts = append(traceExpOpts, otlptracegrpc.WithInsecure())
+	}
+
+	traceExp, err := otlptracegrpc.New(ctx, traceExpOpts...)
+	if err != nil {
+		return nil, err
+	}
+
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exp, sdktrace.WithBatchTimeout(o.batchTimeout)),
+		sdktrace.WithBatcher(traceExp, sdktrace.WithBatchTimeout(o.batchTimeout)),
 		sdktrace.WithSampler(o.sampler),
 		sdktrace.WithResource(res),
 	)
-
 	otel.SetTracerProvider(tp)
+
+	// logs
+	var (
+		lp     *sdklog.LoggerProvider
+		logger *slog.Logger
+	)
+
+	logExpOpts := []otlploggrpc.Option{
+		otlploggrpc.WithEndpoint(endpoint),
+	}
+
+	if o.insecure {
+		logExpOpts = append(logExpOpts, otlploggrpc.WithInsecure())
+	}
+
+	logExp, err := otlploggrpc.New(ctx, logExpOpts...)
+	if err != nil {
+		_ = tp.Shutdown(ctx)
+		return nil, err
+	}
+
+	lp = sdklog.NewLoggerProvider(
+		sdklog.WithProcessor(sdklog.NewBatchProcessor(logExp)),
+		sdklog.WithResource(res),
+	)
+
+	otelSlog := otelslog.NewLogger(serverName, otelslog.WithLoggerProvider(lp))
+
+	if o.slogHandler != nil {
+		otelHandler := otelSlog.Handler()
+
+		tee := slogmulti.Fanout(otelHandler, o.slogHandler)
+		logger = slog.New(tee)
+		slog.SetDefault(logger)
+	}
+
 	otel.SetTextMapPropagator(
 		propagation.NewCompositeTextMapPropagator(
 			propagation.TraceContext{},
@@ -142,25 +203,38 @@ func New(
 	return &TracerWrapper{
 		tracer: tp.Tracer(serverName),
 		tp:     tp,
+		lp:     lp,
+		Logger: logger,
 	}, nil
 }
 
 // Shutdown останавливает провайдер трассировки
 func (tw *TracerWrapper) Shutdown(ctx context.Context) error {
-	if tw.tp == nil {
-		return nil
+	var finalErr error
+
+	if tw.tp != nil {
+		if err := tw.tp.Shutdown(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			finalErr = err
+		}
 	}
-	if err := tw.tp.Shutdown(ctx); err != nil && !errors.Is(err, context.Canceled) {
-		return err
+
+	if tw.lp != nil {
+		if err := tw.lp.Shutdown(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			finalErr = errors.Join(finalErr, err)
+		}
 	}
-	return nil
+
+	return finalErr
 }
 
 // Start создаёт новый Span с указанным именем name и возвращает обновлённый контекст
 // Каждый Span необходимо завершать.
 func (tw *TracerWrapper) Start(ctx context.Context, name string) (context.Context, Span) {
 	ctx, span := tw.tracer.Start(ctx, name)
-	return ctx, &spanWrapper{span: span}
+
+	return ctx, &spanWrapper{
+		span: span,
+	}
 }
 
 // TraceIDFromContext возвращает текущий TraceID из контекста или пустую строку, если спан не валиден
@@ -170,6 +244,7 @@ func (tw *TracerWrapper) TraceIDFromContext(ctx context.Context) string {
 	if sc.IsValid() {
 		return sc.TraceID().String()
 	}
+
 	return ""
 }
 
