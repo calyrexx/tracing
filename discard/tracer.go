@@ -2,6 +2,7 @@ package discard
 
 import (
 	"context"
+
 	"github.com/calyrexx/tracing"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -21,5 +22,6 @@ func (t tracer) TraceIDFromContext(ctx context.Context) string {
 	if sc.IsValid() {
 		return sc.TraceID().String()
 	}
+
 	return ""
 }

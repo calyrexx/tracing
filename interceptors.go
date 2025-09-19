@@ -3,8 +3,9 @@ package tracing
 import (
 	"context"
 	"encoding/json"
-	"go.opentelemetry.io/otel"
 	"strings"
+
+	"go.opentelemetry.io/otel"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -22,6 +23,7 @@ func (c metadataCarrier) Get(key string) string {
 	if len(vals) > 0 {
 		return vals[0]
 	}
+
 	return ""
 }
 
@@ -35,12 +37,14 @@ func (c metadataCarrier) Keys() []string {
 	for k := range c.MD {
 		out = append(out, k)
 	}
+
 	return out
 }
 
-// PropagationUnaryInterceptor распространяет трейс через метаданные gRPC
+// PropagationUnaryInterceptor распространяет трейс через метаданные gRPC.
 func PropagationUnaryInterceptor() grpc.UnaryClientInterceptor {
 	propagator := otel.GetTextMapPropagator()
+
 	return func(
 		ctx context.Context,
 		method string,
@@ -62,7 +66,7 @@ func PropagationUnaryInterceptor() grpc.UnaryClientInterceptor {
 	}
 }
 
-// TracingUnaryInterceptor добавляет трейсинг для входящих gRPC-запросов
+// TracingUnaryInterceptor добавляет трейсинг для входящих gRPC-запросов.
 func TracingUnaryInterceptor() grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,

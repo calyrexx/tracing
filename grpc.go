@@ -6,7 +6,7 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
-// StatsClientHandler создает обработчик статистики для gRPC-клиента
+// StatsClientHandler создает обработчик статистики для gRPC-клиента.
 func StatsClientHandler() stats.Handler {
 	return otelgrpc.NewClientHandler(
 		otelgrpc.WithTracerProvider(otel.GetTracerProvider()),
@@ -14,7 +14,7 @@ func StatsClientHandler() stats.Handler {
 	)
 }
 
-// StatsServerHandler создает обработчик статистики для gRPC-сервера
+// StatsServerHandler создает обработчик статистики для gRPC-сервера.
 func StatsServerHandler() stats.Handler {
 	return otelgrpc.NewServerHandler(
 		otelgrpc.WithTracerProvider(otel.GetTracerProvider()),
