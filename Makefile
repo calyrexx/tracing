@@ -1,4 +1,4 @@
-.PHONY: lint compush stage
+.PHONY: lint compush
 MAKEFLAGS += --no-print-directory
 GIT_BRANCH := $(shell git branch --show-current)
 GIT_REMOTE := git@github.com:calyrexx/tracing.git
@@ -7,12 +7,6 @@ CHECK_EMOJI := ✅
 ERROR_EMOJI := ❌
 INFO_EMOJI := ℹ️
 ARROW_UP := ⬆️
-
-help:
-	@echo "Available commands:"
-	@echo "  lint       - Run linters"
-	@echo "  compush    - Run pre-commit checks, commit, and push changes"
-	@echo "  stage      - Stage changes and push to Git"
 
 lint:
 	@echo "$(INFO_EMOJI) Running linters..."
@@ -24,9 +18,6 @@ compush:
 	@echo "$(INFO_EMOJI) Running pre-commit checks..."
 	@$(MAKE) lint
 	@echo "$(CHECK_EMOJI) Pre-commit checks passed! Moving to staging..."
-	@$(MAKE) stage
-
-stage:
 	@echo "$(INFO_EMOJI) Staging changes..."
 	@git add .
 	@git commit -m "$(m)"
