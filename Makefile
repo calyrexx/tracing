@@ -1,7 +1,7 @@
 .PHONY: lint compush
 MAKEFLAGS += --no-print-directory
 GIT_BRANCH := $(shell git branch --show-current)
-GIT_REMOTE := git@github.com:calyrexx/tracing.git
+GIT_REMOTE := git@github.com:calyrexx/telemetry.git
 
 CHECK_EMOJI := ✅
 ERROR_EMOJI := ❌

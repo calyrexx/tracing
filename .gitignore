@@ -1,9 +1,4 @@
 .idea
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
 
 # Test binary, built with `go test -c`
 *.test
@@ -16,6 +11,4 @@ go.work.sum
 .env
 
 # Makefile outputs
-mocks.log
 lint.log
-test_output.log

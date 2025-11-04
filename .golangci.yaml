@@ -1,9 +1,9 @@
+version: "2"
 run:
   concurrency: 4
   allow-parallel-runners: true
-
 linters:
-  disable-all: true
+  default: none
   enable:
     - asasalint
     - asciicheck
@@ -21,7 +21,6 @@ linters:
     - errchkjson
     - errname
     - errorlint
-    - exhaustive
     - forbidigo
     - forcetypeassert
     - funlen
@@ -34,14 +33,11 @@ linters:
     - gocyclo
     - godot
     - godox
-    - gofmt
     - goheader
-    - goimports
     - gomoddirectives
     - gomodguard
     - goprintffuncname
     - gosec
-    - gosimple
     - gosmopolitan
     - govet
     - grouper
@@ -71,35 +67,80 @@ linters:
     - reassign
     - revive
     - staticcheck
-    - stylecheck
     - tagalign
     - tagliatelle
     - testableexamples
     - thelper
     - tparallel
-    - typecheck
     - unconvert
     - unparam
     - unused
     - usestdlibvars
     - whitespace
     - wrapcheck
-    - wsl
+    - wsl_v5
     - zerologlint
-
-linters-settings:
-  revive:
-    rules:
-      - name: var-naming
-        disabled: true
-  staticcheck:
-    checks: ["all", "-SA1029"]
-  stylecheck:
-    checks: ["all", "-ST1003"]
-
-  tagliatelle:
-    case:
-      use-field-name: false
+  settings:
+    cyclop:
+      max-complexity: 15
+    dupl:
+      threshold: 200
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    forbidigo:
+      forbid:
+        - pattern: ^fmt\.Println$
+    funlen:
+      lines: 200
+      statements: 50
+    gocyclo:
+      min-complexity: 20
+    gosec:
+      excludes:
+        - G402
+        - G106
+    interfacebloat:
+      max: 15
+    lll:
+      line-length: 120
+    revive:
       rules:
-        json: snake
-        yaml: snake
+        - name: var-naming
+          disabled: true
+    staticcheck:
+      checks:
+        - all
+        - -SA1029
+        - -ST1003
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+          yaml: snake
+        use-field-name: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - cyclop
+        path: (.+)_test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

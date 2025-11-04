@@ -1,20 +1,27 @@
-package tracing
+package telemetry
 
 import (
-	"bytes"
 	"fmt"
-	"sync"
 
-	"github.com/goccy/go-json"
+	"github.com/bytedance/sonic"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
-var jsonBufferPool = sync.Pool{
-	New: func() any {
-		return new(bytes.Buffer)
-	},
+type Span interface {
+	End()
+	SetStatus(code codes.Code, description string)
+	SetStringAttribute(key, value string)
+	SetIntAttribute(key string, value int)
+	SetInt64Attribute(key string, value int64)
+	SetBoolAttribute(key string, value bool)
+	SetJSONAttribute(key string, value any)
+	AddEvent(name string)
+	AddEventWithInt(name string, key string, value int)
+	AddEventWithBool(name string, key string, value bool)
+	AddEventWithString(name string, key string, value string)
+	RecordError(err error)
 }
 
 type spanWrapper struct {
@@ -24,6 +31,10 @@ type spanWrapper struct {
 // End корректно завершает span.
 func (s *spanWrapper) End() {
 	s.span.End()
+}
+
+func (s *spanWrapper) SetStatus(code codes.Code, description string) {
+	s.span.SetStatus(code, description)
 }
 
 // SetStringAttribute устанавливает строковый атрибут.
@@ -48,19 +59,8 @@ func (s *spanWrapper) SetBoolAttribute(key string, value bool) {
 
 // SetJSONAttribute сериализует объект в JSON и устанавливает как атрибут.
 func (s *spanWrapper) SetJSONAttribute(key string, value any) {
-	bufInterface := jsonBufferPool.Get()
-	buf, ok := bufInterface.(*bytes.Buffer)
-
-	if !ok {
-		buf = &bytes.Buffer{}
-	} else {
-		defer jsonBufferPool.Put(buf)
-	}
-
-	buf.Reset()
-
-	if err := json.NewEncoder(buf).Encode(value); err == nil {
-		s.span.SetAttributes(attribute.String(key, buf.String()))
+	if str, err := sonic.MarshalString(value); err == nil {
+		s.span.SetAttributes(attribute.String(key, str))
 	}
 }
 

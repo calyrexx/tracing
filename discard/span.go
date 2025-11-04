@@ -1,12 +1,18 @@
 package discard
 
+import "go.opentelemetry.io/otel/codes"
+
 type span struct{}
 
 func (s span) End() {}
 
 func (s span) SetStringAttribute(key, value string) {}
 
+func (s span) SetStatus(code codes.Code, description string) {}
+
 func (s span) SetIntAttribute(key string, value int) {}
+
+func (s span) SetInt64Attribute(key string, value int64) {}
 
 func (s span) SetBoolAttribute(key string, value bool) {}
 
