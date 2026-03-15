@@ -7,13 +7,15 @@ import (
 	"log/slog"
 	"time"
 
-	slogmulti "github.com/samber/slog-multi"
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/contrib/processors/minsev"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
+	"go.opentelemetry.io/otel/metric"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -24,12 +26,18 @@ import (
 
 type Tracer interface {
 	Start(ctx context.Context, name string) (context.Context, Span)
+	StartWith(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, Span)
+	SpanFromContext(ctx context.Context) Span
+	TraceIDFromContext(ctx context.Context) string
+	Metric() Metric
 }
 
 type Wrapper struct {
 	tracer trace.Tracer
+	meter  metric.Meter
 	tp     *sdktrace.TracerProvider
 	lp     *sdklog.LoggerProvider
+	mp     *sdkmetric.MeterProvider
 }
 
 // New создаёт Wrapper и возвращает его. Параметры serverName и endpoint являются обязательными.
@@ -88,6 +96,14 @@ func New(
 		}
 	}
 
+	var mp *sdkmetric.MeterProvider
+	if opts.enableMetrics {
+		mp, err = newMeterProvider(ctx, endpoint, opts, res)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	otel.SetTextMapPropagator(
 		propagation.NewCompositeTextMapPropagator(
 			propagation.TraceContext{},
@@ -102,10 +118,19 @@ func New(
 		tr = otel.GetTracerProvider().Tracer(serverName)
 	}
 
+	var mt metric.Meter
+	if mp != nil {
+		mt = mp.Meter(serverName)
+	} else {
+		mt = otel.GetMeterProvider().Meter(serverName)
+	}
+
 	return &Wrapper{
 		tracer: tr,
+		meter:  mt,
 		tp:     tp,
 		lp:     lp,
+		mp:     mp,
 	}, nil
 }
 
@@ -146,7 +171,7 @@ func newLogsProvider(
 	var h = otelHandler
 
 	if opts.logger.slogHandler != nil {
-		h = slogmulti.Fanout(otelHandler, opts.logger.slogHandler)
+		h = slog.NewMultiHandler(otelHandler, opts.logger.slogHandler)
 	}
 
 	slog.SetDefault(slog.New(h))
@@ -183,6 +208,56 @@ func newTracerProvider(
 	return tp, nil
 }
 
+func newMeterProvider(
+	ctx context.Context,
+	endpoint string,
+	opts *telemetryOptions,
+	res *resource.Resource,
+) (*sdkmetric.MeterProvider, error) {
+	metricExpOpts := []otlpmetricgrpc.Option{
+		otlpmetricgrpc.WithEndpoint(endpoint),
+	}
+
+	if opts.insecure {
+		metricExpOpts = append(metricExpOpts, otlpmetricgrpc.WithInsecure())
+	}
+
+	metricExp, err := otlpmetricgrpc.New(ctx, metricExpOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create metric exporter: %w", err)
+	}
+
+	reader := sdkmetric.NewPeriodicReader(
+		metricExp,
+		sdkmetric.WithInterval(opts.metric.exportInterval),
+	)
+
+	buckets := opts.metric.histogramBuckets
+	if len(buckets) == 0 {
+		buckets = []float64{0.001, 0.005, 0.01, 0.1, 1, 10}
+	}
+
+	mp := sdkmetric.NewMeterProvider(
+		sdkmetric.WithResource(res),
+		sdkmetric.WithReader(reader),
+		sdkmetric.WithView(
+			sdkmetric.NewView(
+				sdkmetric.Instrument{
+					Kind: sdkmetric.InstrumentKindHistogram,
+				},
+				sdkmetric.Stream{
+					Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
+						Boundaries: buckets,
+					},
+				},
+			),
+		),
+	)
+	otel.SetMeterProvider(mp)
+
+	return mp, nil
+}
+
 // Shutdown останавливает провайдер телеметрии.
 func (tw *Wrapper) Shutdown(ctx context.Context) error {
 	var finalErr error
@@ -195,6 +270,12 @@ func (tw *Wrapper) Shutdown(ctx context.Context) error {
 
 	if tw.lp != nil {
 		if err := tw.lp.Shutdown(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			finalErr = errors.Join(finalErr, err)
+		}
+	}
+
+	if tw.mp != nil {
+		if err := tw.mp.Shutdown(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			finalErr = errors.Join(finalErr, err)
 		}
 	}
@@ -215,8 +296,16 @@ func (tw *Wrapper) Start(ctx context.Context, name string) (context.Context, Spa
 	}
 }
 
+func (tw *Wrapper) StartWith(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, Span) {
+	ctx, span := tw.tracer.Start(ctx, name, opts...)
+
+	return ctx, &spanWrapper{
+		span: span,
+	}
+}
+
 // TraceIDFromContext возвращает текущий TraceID из контекста или пустую строку, если спан не валиден.
-func TraceIDFromContext(ctx context.Context) string {
+func (tw *Wrapper) TraceIDFromContext(ctx context.Context) string {
 	sc := trace.SpanFromContext(ctx).SpanContext()
 
 	if sc.IsValid() {
@@ -226,7 +315,7 @@ func TraceIDFromContext(ctx context.Context) string {
 	return ""
 }
 
-func SpanFromContext(ctx context.Context) Span {
+func (tw *Wrapper) SpanFromContext(ctx context.Context) Span {
 	return &spanWrapper{
 		span: trace.SpanFromContext(ctx),
 	}

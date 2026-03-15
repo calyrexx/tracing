@@ -15,13 +15,22 @@ type TracerOption func(*tracerOptions)
 
 type LoggerOption func(*loggerOptions)
 
+type MetricOption func(*metricOptions)
+
 type telemetryOptions struct {
-	insecure     bool
-	resAttrs     []attribute.KeyValue
-	enableTraces bool
-	enableLogs   bool
-	tracer       tracerOptions
-	logger       loggerOptions
+	insecure      bool
+	resAttrs      []attribute.KeyValue
+	enableTraces  bool
+	enableLogs    bool
+	enableMetrics bool
+	tracer        tracerOptions
+	logger        loggerOptions
+	metric        metricOptions
+}
+
+type metricOptions struct {
+	exportInterval   time.Duration
+	histogramBuckets []float64
 }
 
 type tracerOptions struct {
@@ -101,8 +110,31 @@ func WithLogBatchTimeout(d time.Duration) LoggerOption {
 	}
 }
 
+// WithSlogHandler задаёт внешний slog.Handler, который будет добавлен в fanout вместе с OTEL-хендлером.
+// ВАЖНО: нельзя передавать сюда slog.Default().Handler(), если до этого не был установлен slog с кастомным slog.Handler
+// (или хендлер, который сам пишет в slog/log),
+// иначе он окажется одновременно и в цепочке slog, и в стандартном логгере, что приведёт к взаимной блокировке
+// и зависанию приложения при вызовах slog.Info/Debug, log.Print/Printf и т.п.
 func WithSlogHandler(h slog.Handler) LoggerOption {
 	return func(l *loggerOptions) {
 		l.slogHandler = h
+	}
+}
+
+func WithMetric(opts ...MetricOption) Option {
+	return func(c *telemetryOptions) {
+		c.enableMetrics = true
+	}
+}
+
+func WithMetricExportInterval(d time.Duration) MetricOption {
+	return func(l *metricOptions) {
+		l.exportInterval = d
+	}
+}
+
+func WithHistogramBuckets(b []float64) MetricOption {
+	return func(l *metricOptions) {
+		l.histogramBuckets = b
 	}
 }

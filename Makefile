@@ -14,7 +14,7 @@ lint:
 	@rm -f lint.log
 	@echo "$(CHECK_EMOJI) No lint errors found!"
 
-compush:
+stage:
 	@echo "$(INFO_EMOJI) Running pre-commit checks..."
 	@$(MAKE) lint
 	@echo "$(CHECK_EMOJI) Pre-commit checks passed! Moving to staging..."

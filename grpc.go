@@ -27,14 +27,14 @@ func StatsServerHandler() stats.Handler {
 	)
 }
 
-func UnaryTracingInterceptor() grpc.UnaryServerInterceptor {
+func UnaryTracing(tr Tracer) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req any,
-		info *grpc.UnaryServerInfo,
+		_ *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (any, error) {
-		span := SpanFromContext(ctx)
+		span := tr.SpanFromContext(ctx)
 
 		span.SetJSONAttribute("rpc.request", req)
 
