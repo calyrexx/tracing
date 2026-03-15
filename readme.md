@@ -1,6 +1,4 @@
-# tracing 🌐
-
-# telemetry
+# telemetry 🌐
 
 Минималистичная обёртка над OpenTelemetry для **трейсов** и **логов** (slog).
 
